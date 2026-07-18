@@ -27,15 +27,15 @@ The package provides:
 Install from npm:
 
 ```bash
-npm install thtex
-# or: pnpm add thtex
-# or: yarn add thtex
+npm install @arnon3339/thtex
+# or: pnpm add @arnon3339/thtex
+# or: yarn add @arnon3339/thtex
 ```
 
 Install and verify the browser runtime in your public directory:
 
 ```bash
-npx thtex --to public/xelatex
+npx @arnon3339/thtex --to public/xelatex
 ```
 
 The command works with npm, pnpm, and Yarn. The legacy command remains
@@ -51,7 +51,7 @@ Run the command again whenever the installed package version changes. To check
 an existing installation without changing it:
 
 ```bash
-npx thtex --check --to public/xelatex
+npx @arnon3339/thtex --check --to public/xelatex
 ```
 
 For a Vite application, automate this in `package.json`:
@@ -71,7 +71,7 @@ For a Vite application, automate this in `package.json`:
 ## Basic usage
 
 ```ts
-import { XeLaTeXCompiler } from "thtex";
+import { XeLaTeXCompiler } from "@arnon3339/thtex";
 
 const compiler = new XeLaTeXCompiler({
   assetBaseUrl: "/xelatex/",
@@ -189,7 +189,7 @@ const result = await compiler.compile(source, {
 ### Type reference
 
 ```ts
-import type { XeLaTeXAdditionalFile } from "thtex";
+import type { XeLaTeXAdditionalFile } from "@arnon3339/thtex";
 
 const files: XeLaTeXAdditionalFile[] = [
   { path: "fonts/MyFont.ttf", data: fontBytes },
@@ -213,7 +213,7 @@ Create one compiler for the component lifetime and dispose it during cleanup:
 
 ```tsx
 import { useEffect, useRef, useState } from "react";
-import { XeLaTeXCompiler } from "thtex";
+import { XeLaTeXCompiler } from "@arnon3339/thtex";
 
 export function PdfCompiler({ source }: { source: string }) {
   const compilerRef = useRef<XeLaTeXCompiler | null>(null);
@@ -268,8 +268,8 @@ This pattern pre-loads font files once and injects them on each compile:
 
 ```tsx
 import { useEffect, useRef, useState } from "react";
-import { XeLaTeXCompiler } from "thtex";
-import type { XeLaTeXAdditionalFile } from "thtex";
+import { XeLaTeXCompiler } from "@arnon3339/thtex";
+import type { XeLaTeXAdditionalFile } from "@arnon3339/thtex";
 
 export function PdfCompiler({ source }: { source: string }) {
   const compilerRef = useRef<XeLaTeXCompiler | null>(null);
@@ -483,7 +483,7 @@ Compilation failures reject with `XeLaTeXCompileError`, which includes the
 complete compiler log:
 
 ```ts
-import { XeLaTeXCompileError } from "thtex";
+import { XeLaTeXCompileError } from "@arnon3339/thtex";
 
 try {
   await compiler.compile(source);
@@ -560,13 +560,29 @@ Run the repository's React demo with:
 pnpm dev
 ```
 
+A standalone Vite + React PWA is available in
+[`examples/react`](./examples/react). It includes a source editor, PDF preview,
+offline service worker, Cloudflare Pages headers, SPA redirects, and automatic
+Cloudflare-safe runtime chunking.
+
 ## Runtime size and hosting
 
 XeTeX, ICU, fonts, and the focused TeX tree are substantial browser assets.
 The initial installation is roughly 75 MiB and should be served with long-lived
 cache headers or a service worker. The largest individual asset is ICU data at
-about 31.9 MB; confirm that your static host accepts files larger than 25 MB.
-The runtime is downloaded once per browser cache and reused by one compiler
+about 31.9 MB.
+
+For a host with a per-file limit, ask the asset CLI to split oversized runtime
+files. For example, Cloudflare Pages has a 25 MiB asset limit:
+
+```bash
+thtex --to public/xelatex --max-file-size 24MiB
+```
+
+The destination manifest records the chunks, and the worker reassembles the
+original runtime file in memory. Engine WASM files are not splittable, so the
+CLI reports an error if the selected limit is lower than an engine asset. The
+runtime is downloaded once per browser cache and reused by one compiler
 instance for subsequent jobs.
 
 ## License

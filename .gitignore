@@ -12,6 +12,8 @@ dist-ssr
 demo-dist
 *.local
 /public/xelatex/xelatex.worker.js
+/examples/react/dist/
+/examples/react/public/xelatex/
 
 # Editor directories and files
 .vscode/*

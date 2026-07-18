@@ -1,17 +1,21 @@
 {
-  "name": "thtex",
+  "name": "@arnon3339/thtex",
   "version": "0.1.0",
   "description": "Browser XeLaTeX compiler powered by WebAssembly and an isolated Web Worker.",
   "type": "module",
   "license": "MIT",
   "author": "Arnon Songmoolnak",
-  "homepage": "https://github.com/arnon3339/xelatex-wasm#readme",
+  "homepage": "https://github.com/arnon3339/thtex#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arnon3339/xelatex-wasm.git"
+    "url": "git+https://github.com/arnon3339/thtex.git"
   },
   "bugs": {
-    "url": "https://github.com/arnon3339/xelatex-wasm/issues"
+    "url": "https://github.com/arnon3339/thtex/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "keywords": [
     "latex",
@@ -38,9 +42,9 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "thtex": "./scripts/copy-assets.mjs",
-    "thtex-assets": "./scripts/copy-assets.mjs",
-    "thtex-manifest": "./scripts/create-runtime-manifest.mjs"
+    "thtex": "scripts/copy-assets.mjs",
+    "thtex-assets": "scripts/copy-assets.mjs",
+    "thtex-manifest": "scripts/create-runtime-manifest.mjs"
   },
   "files": [
     "dist",

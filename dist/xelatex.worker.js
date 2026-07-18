@@ -74,14 +74,33 @@ async function loadRuntimeFiles() {
         });
     };
     reportProgress();
-    const files = await Promise.all(manifest.files.map(async ({ path, size }) => {
+    const fetchAsset = async (path, expectedSize) => {
         const assetResponse = await fetch(getRuntimeUrl(path));
         if (!assetResponse.ok) {
             throw new Error(`Runtime asset ${path} could not be loaded (${assetResponse.status}).`);
         }
         const bytes = new Uint8Array(await assetResponse.arrayBuffer());
-        if (bytes.byteLength !== size) {
-            throw new Error(`Runtime asset ${path} has ${bytes.byteLength} bytes; the manifest expects ${size}.`);
+        if (bytes.byteLength !== expectedSize) {
+            throw new Error(`Runtime asset ${path} has ${bytes.byteLength} bytes; the manifest expects ${expectedSize}.`);
+        }
+        return bytes;
+    };
+    const files = await Promise.all(manifest.files.map(async ({ path, size, chunks }) => {
+        let bytes;
+        if (chunks?.length) {
+            const chunkBytes = await Promise.all(chunks.map((chunk) => fetchAsset(chunk.path, chunk.size)));
+            bytes = new Uint8Array(size);
+            let offset = 0;
+            for (const chunk of chunkBytes) {
+                bytes.set(chunk, offset);
+                offset += chunk.byteLength;
+            }
+            if (offset !== size) {
+                throw new Error(`Runtime chunks for ${path} have ${offset} bytes; the manifest expects ${size}.`);
+            }
+        }
+        else {
+            bytes = await fetchAsset(path, size);
         }
         loadedBytes += bytes.byteLength;
         loadedFiles += 1;

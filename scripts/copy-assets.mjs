@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 
-import { cp, mkdir, readFile, realpath, stat } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  readFile,
+  realpath,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -16,13 +24,14 @@ function printHelp() {
   console.log(`Copy XeLaTeX WASM browser assets into an application.
 
 Usage:
-  thtex [--to <directory>]
+  thtex [--to <directory>] [--max-file-size <size>]
   thtex --check [--to <directory>]
 
 Options:
-  --to <directory>  Destination directory (default: public/xelatex)
-  --check           Verify previously copied assets without changing them
-  --help             Show this help
+  --to <directory>       Destination directory (default: public/xelatex)
+  --max-file-size <size> Split runtime files above this size (e.g. 24MiB)
+  --check                Verify previously copied assets without changing them
+  --help                 Show this help
 
 The setup command copies and verifies the worker, WASM engines, ICU data,
 fonts, and focused TeX runtime. It overwrites package-owned files but does not
@@ -31,6 +40,35 @@ delete unrelated files in the destination.`);
 
 let destination = "public/xelatex";
 let checkOnly = false;
+let maxFileSize;
+
+function parseSize(value) {
+  const match = /^(\d+(?:\.\d+)?)\s*(b|kb|kib|mb|mib|gb|gib)?$/i.exec(value);
+
+  if (!match) {
+    throw new Error(
+      `Invalid file size "${value}". Use bytes or a value such as 24MiB.`,
+    );
+  }
+
+  const units = {
+    b: 1,
+    kb: 1_000,
+    kib: 1024,
+    mb: 1_000_000,
+    mib: 1024 * 1024,
+    gb: 1_000_000_000,
+    gib: 1024 * 1024 * 1024,
+  };
+  const unit = (match[2] ?? "b").toLowerCase();
+  const size = Math.floor(Number(match[1]) * units[unit]);
+
+  if (!Number.isSafeInteger(size) || size < 1) {
+    throw new Error(`Invalid file size "${value}".`);
+  }
+
+  return size;
+}
 
 for (let index = 2; index < process.argv.length; index += 1) {
   const argument = process.argv[index];
@@ -57,6 +95,18 @@ for (let index = 2; index < process.argv.length; index += 1) {
     continue;
   }
 
+  if (argument === "--max-file-size") {
+    const value = process.argv[index + 1];
+
+    if (!value) {
+      throw new Error("--max-file-size requires a size such as 24MiB.");
+    }
+
+    maxFileSize = parseSize(value);
+    index += 1;
+    continue;
+  }
+
   throw new Error(`Unknown argument: ${argument}`);
 }
 
@@ -65,15 +115,17 @@ if (!checkOnly) await mkdir(destinationPath, { recursive: true });
 
 async function verifyAssets() {
   const manifest = JSON.parse(
-    await readFile(path.join(runtimeSource, "runtime-manifest.json"), "utf8"),
+    await readFile(path.join(destinationPath, "runtime-manifest.json"), "utf8"),
   );
-  const runtimeFiles = manifest.files.map(({ path: relativePath, size }) => ({
-    relativePath,
-    size,
-    sourcePath: path.join(runtimeSource, relativePath),
-  }));
+  const runtimeFiles = manifest.files.flatMap((file) =>
+    file.chunks?.length
+      ? file.chunks.map(({ path: relativePath, size }) => ({
+          relativePath,
+          size,
+        }))
+      : [{ relativePath: file.path, size: file.size }],
+  );
   const standaloneFiles = [
-    "runtime-manifest.json",
     "engine/xetex.mjs",
     "engine/xetex.wasm",
     "engine/xdvipdfmx.mjs",
@@ -82,6 +134,10 @@ async function verifyAssets() {
     relativePath,
     sourcePath: path.join(runtimeSource, relativePath),
   }));
+  standaloneFiles.push({
+    relativePath: "runtime-manifest.json",
+    sourcePath: path.join(destinationPath, "runtime-manifest.json"),
+  });
   standaloneFiles.push({
     relativePath: "xelatex.worker.js",
     sourcePath: workerSource,
@@ -108,12 +164,31 @@ async function verifyAssets() {
     }
 
     totalBytes += metadata.size;
+
+    if (maxFileSize && metadata.size > maxFileSize) {
+      throw new Error(
+        `XeLaTeX asset ${destinationFile} is ${metadata.size} bytes, above --max-file-size ${maxFileSize}. Engine files cannot be split; choose a larger limit.`,
+      );
+    }
   }
 
   return { fileCount: expectedFiles.length, totalBytes };
 }
 
 if (!checkOnly) {
+  const previousManifest = await readFile(
+    path.join(destinationPath, "runtime-manifest.json"),
+    "utf8",
+  )
+    .then(JSON.parse)
+    .catch(() => null);
+
+  for (const file of previousManifest?.files ?? []) {
+    for (const chunk of file.chunks ?? []) {
+      await unlink(path.join(destinationPath, chunk.path)).catch(() => undefined);
+    }
+  }
+
   const [sourceRealPath, destinationRealPath] = await Promise.all([
     realpath(runtimeSource),
     realpath(destinationPath),
@@ -132,6 +207,34 @@ if (!checkOnly) {
   await cp(workerSource, path.join(destinationPath, "xelatex.worker.js"), {
     force: true,
   });
+
+  if (maxFileSize) {
+    const manifestPath = path.join(destinationPath, "runtime-manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+
+    for (const file of manifest.files) {
+      if (file.size <= maxFileSize) continue;
+
+      const sourcePath = path.join(destinationPath, file.path);
+      const bytes = await readFile(sourcePath);
+      const chunks = [];
+
+      for (let offset = 0, part = 1; offset < bytes.length; part += 1) {
+        const chunk = bytes.subarray(offset, offset + maxFileSize);
+        const chunkPath = `${file.path}.part${String(part).padStart(3, "0")}`;
+        const outputPath = path.join(destinationPath, chunkPath);
+        await mkdir(path.dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, chunk);
+        chunks.push({ path: chunkPath, size: chunk.byteLength });
+        offset += chunk.byteLength;
+      }
+
+      file.chunks = chunks;
+      await unlink(sourcePath);
+    }
+
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  }
 }
 
 const { fileCount, totalBytes } = await verifyAssets();
