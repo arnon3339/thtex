@@ -1,0 +1,88 @@
+{
+  "name": "thtex",
+  "version": "0.1.0",
+  "description": "Browser XeLaTeX compiler powered by WebAssembly and an isolated Web Worker.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Arnon Songmoolnak",
+  "homepage": "https://github.com/arnon3339/xelatex-wasm#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arnon3339/xelatex-wasm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arnon3339/xelatex-wasm/issues"
+  },
+  "keywords": [
+    "latex",
+    "xelatex",
+    "xetex",
+    "webassembly",
+    "wasm",
+    "web-worker",
+    "pdf"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "thtex": "./scripts/copy-assets.mjs",
+    "thtex-assets": "./scripts/copy-assets.mjs",
+    "thtex-manifest": "./scripts/create-runtime-manifest.mjs"
+  },
+  "files": [
+    "dist",
+    "public/xelatex",
+    "!public/xelatex/xelatex.worker.js",
+    "src/compiler.ts",
+    "src/index.ts",
+    "src/types.ts",
+    "src/workers/xelatex.worker.ts",
+    "scripts/copy-assets.mjs",
+    "scripts/create-runtime-manifest.mjs",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "predev": "pnpm run build && node scripts/copy-assets.mjs --to public/xelatex",
+    "dev": "vite",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.lib.json && tsc -p tsconfig.worker.json",
+    "build:runtime": "pnpm xelatex:runtime && pnpm run build",
+    "build:demo": "pnpm run build && node scripts/copy-assets.mjs --to public/xelatex && tsc -b && vite build",
+    "check": "pnpm run build:runtime && pnpm run lint && pnpm run test:runtime && pnpm pack --dry-run",
+    "lint": "oxlint src scripts",
+    "pack:check": "pnpm pack --dry-run",
+    "prepack": "pnpm run build",
+    "preview": "vite preview",
+    "test:runtime": "node scripts/runtime-smoke-test.mjs",
+    "xelatex:format": "node scripts/create-xelatex-format.mjs",
+    "xelatex:manifest": "node scripts/create-runtime-manifest.mjs",
+    "xelatex:runtime": "pnpm xelatex:sync-artifacts && pnpm xelatex:sync-tex-support && pnpm xelatex:format && pnpm xelatex:manifest",
+    "xelatex:sync-artifacts": "node scripts/sync-engine-artifacts.mjs",
+    "xelatex:sync-tex-support": "node scripts/sync-tex-support.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "oxlint": "^1.71.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1"
+  }
+}
