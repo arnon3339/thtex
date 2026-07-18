@@ -2,6 +2,38 @@
   "version": 1,
   "files": [
     {
+      "path": "texmf/bibtex/bst/base/abbrv.bst",
+      "size": 20329
+    },
+    {
+      "path": "texmf/bibtex/bst/base/acm.bst",
+      "size": 21064
+    },
+    {
+      "path": "texmf/bibtex/bst/base/alpha.bst",
+      "size": 23907
+    },
+    {
+      "path": "texmf/bibtex/bst/base/apalike.bst",
+      "size": 24635
+    },
+    {
+      "path": "texmf/bibtex/bst/base/ieeetr.bst",
+      "size": 18361
+    },
+    {
+      "path": "texmf/bibtex/bst/base/plain.bst",
+      "size": 20613
+    },
+    {
+      "path": "texmf/bibtex/bst/base/siam.bst",
+      "size": 19403
+    },
+    {
+      "path": "texmf/bibtex/bst/base/unsrt.bst",
+      "size": 18030
+    },
+    {
       "path": "texmf/dvipdfmx/dvipdfmx.cfg",
       "size": 9366
     },
@@ -1587,7 +1619,7 @@
     },
     {
       "path": "texmf/web2c/xelatex.fmt",
-      "size": 4432355
+      "size": 4432357
     },
     {
       "path": "texmf/web2c/xelatex.ini",

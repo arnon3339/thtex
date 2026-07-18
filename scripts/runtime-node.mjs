@@ -37,6 +37,8 @@ const texEnvironment = {
   VFFONTS: ".:/texmf/fonts/vf//",
   TEXFONTMAPS: ".:/texmf/fonts/map//",
   DVIPDFMXINPUTS: ".:/texmf/dvipdfmx//:/texmf/tex//",
+  BIBINPUTS: ".:/work//:/texmf/bibtex/bib//",
+  BSTINPUTS: ".:/work//:/texmf/bibtex/bst//",
   ENCFONTS: ".:/texmf/fonts/enc//",
   CMAPFONTS: ".:/texmf/fonts/cmap//",
   OPENTYPEFONTS: ".:/fonts//:/texmf/fonts/opentype//",

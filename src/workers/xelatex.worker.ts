@@ -10,6 +10,7 @@ type CompileRequest = {
   requestId: string;
   source: string;
   passes: number;
+  bibtex: boolean | "auto";
   additionalFiles?: AdditionalFile[];
 };
 
@@ -86,6 +87,8 @@ const texEnvironment: Record<string, string> = {
   VFFONTS: ".:/texmf/fonts/vf//",
   TEXFONTMAPS: ".:/texmf/fonts/map//",
   DVIPDFMXINPUTS: ".:/texmf/dvipdfmx//:/texmf/tex//",
+  BIBINPUTS: ".:/work//:/texmf/bibtex/bib//",
+  BSTINPUTS: ".:/work//:/texmf/bibtex/bst//",
   ENCFONTS: ".:/texmf/fonts/enc//",
   CMAPFONTS: ".:/texmf/fonts/cmap//",
   OPENTYPEFONTS: ".:/fonts//:/texmf/fonts/opentype//",
@@ -231,6 +234,7 @@ post({
 const factoriesPromise = Promise.all([
   importFactory("xetex.mjs"),
   importFactory("xdvipdfmx.mjs"),
+  importFactory("bibtex.mjs"),
 ]);
 
 const runtimeFilesPromise = loadRuntimeFiles();
@@ -334,6 +338,7 @@ function snapshotPassFiles(FS: EmscriptenFileSystem) {
     "main.pdf",
     "main.tex",
     "main.xdv",
+    "bibtex",
     "texmf-config",
     "texmf-home",
     "texmf-var",
@@ -441,8 +446,47 @@ async function runXeTeXPass(
   };
 }
 
+async function runBibTeX(
+  createBibTeXModule: ModuleFactory,
+  runtimeFiles: RuntimeFile[],
+  requestId: string,
+  logLines: string[],
+  passFiles: RuntimeFile[],
+  additionalFiles: AdditionalFile[],
+) {
+  post({
+    type: "status",
+    requestId,
+    message: "Running BibTeX…",
+    phase: "bibliography",
+  });
+  addLogMarker(requestId, logLines, "\n===== BibTeX =====");
+
+  const bibtex = await createBibTeXModule(
+    createModuleOptions("bibtex", runtimeFiles, requestId, logLines),
+  );
+  requireModuleApi(bibtex, "BibTeX");
+  writeFiles(bibtex.FS, passFiles);
+
+  for (const file of additionalFiles) {
+    const vfsPath = `/work/${file.path}`;
+    const separator = vfsPath.lastIndexOf("/");
+    bibtex.FS.mkdirTree(vfsPath.slice(0, separator));
+    bibtex.FS.writeFile(vfsPath, file.data);
+  }
+
+  const status = bibtex.callMain(["main"]);
+
+  if (status !== 0) {
+    throw new Error(`BibTeX exited with status ${status}.`);
+  }
+
+  readRequiredFile(bibtex, "/work/main.bbl");
+  return snapshotPassFiles(bibtex.FS);
+}
+
 async function compile(request: CompileRequest) {
-  const { passes: passCount, requestId, source } = request;
+  const { bibtex: bibtexMode, passes: requestedPassCount, requestId, source } = request;
   const logLines: string[] = [];
 
   try {
@@ -453,18 +497,28 @@ async function compile(request: CompileRequest) {
       phase: "loading-runtime",
     });
 
-    const [[createXeTeXModule, createXdvipdfmxModule], runtime] =
+    const [[createXeTeXModule, createXdvipdfmxModule, createBibTeXModule], runtime] =
       await Promise.all([factoriesPromise, runtimeFilesPromise]);
     const runtimeFiles = runtime.files;
 
-    if (!Number.isInteger(passCount) || passCount < 1 || passCount > 5) {
+    if (!Number.isInteger(requestedPassCount) || requestedPassCount < 1 || requestedPassCount > 5) {
       throw new Error("XeTeX passes must be an integer between 1 and 5.");
+    }
+
+    if (bibtexMode !== true && bibtexMode !== false && bibtexMode !== "auto") {
+      throw new Error('BibTeX mode must be true, false, or "auto".');
     }
 
     const callerFiles = request.additionalFiles ?? [];
 
     let previousPassFiles: RuntimeFile[] = [];
     let finalXdv: Uint8Array | null = null;
+    let bibtexRan = false;
+    const sourceRequestsBibTeX = /\\bibliography\s*\{/.test(source);
+    let passCount =
+      bibtexMode !== false && sourceRequestsBibTeX
+        ? Math.max(2, requestedPassCount)
+        : requestedPassCount;
 
     for (let pass = 1; pass <= passCount; pass += 1) {
       const result = await runXeTeXPass(
@@ -481,6 +535,32 @@ async function compile(request: CompileRequest) {
 
       previousPassFiles = result.nextPassFiles;
       finalXdv = result.xdv;
+
+      if (pass === 1 && bibtexMode !== false) {
+        const aux = previousPassFiles.find((file) => file.path === "/work/main.aux");
+        const auxText = aux ? new TextDecoder().decode(aux.bytes) : "";
+        const auxRequestsBibTeX =
+          /\\bibdata\{/.test(auxText) && /\\bibstyle\{/.test(auxText);
+
+        if (bibtexMode === true && !auxRequestsBibTeX) {
+          throw new Error(
+            "BibTeX was requested, but main.aux contains no bibliography data and style directives.",
+          );
+        }
+
+        if (auxRequestsBibTeX) {
+          previousPassFiles = await runBibTeX(
+            createBibTeXModule,
+            runtimeFiles,
+            requestId,
+            logLines,
+            previousPassFiles,
+            callerFiles,
+          );
+          bibtexRan = true;
+          passCount = Math.max(2, passCount);
+        }
+      }
     }
 
     if (!finalXdv) {
@@ -528,6 +608,7 @@ async function compile(request: CompileRequest) {
         pdf: transferablePdf,
         log: logLines.join("\n"),
         passes: passCount,
+        bibtexRan,
       },
       [transferablePdf],
     );

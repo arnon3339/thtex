@@ -15,28 +15,66 @@ const sourcePath = sourceArgument
   ? path.resolve(sourceArgument)
   : path.join(packageRoot, "scripts", "runtime-smoke-test.tex");
 const source = await readFile(sourcePath, "utf8");
+const bibliography = await readFile(
+  path.join(packageRoot, "scripts", "runtime-smoke-test.bib"),
+);
 const logLines = [];
 const runtimeFiles = await loadRuntimeFiles();
-const xetex = await createEngine("xetex", runtimeFiles, logLines);
-xetex.FS.writeFile("/work/main.tex", source);
 
-const xetexStatus = xetex.callMain([
-  "-fmt=xelatex",
-  "-no-pdf",
-  "-interaction=nonstopmode",
-  "-halt-on-error",
-  "-file-line-error",
-  "-output-directory=/work",
-  "/work/main.tex",
-]);
+async function runXeTeX(passFiles = []) {
+  const xetex = await createEngine("xetex", runtimeFiles, logLines);
+  xetex.FS.writeFile("/work/main.tex", source);
+  xetex.FS.writeFile("/work/references.bib", bibliography);
 
-if (xetexStatus !== 0) {
+  for (const [filePath, bytes] of passFiles) {
+    xetex.FS.writeFile(filePath, bytes);
+  }
+
+  const status = xetex.callMain([
+    "-fmt=xelatex",
+    "-no-pdf",
+    "-interaction=nonstopmode",
+    "-halt-on-error",
+    "-file-line-error",
+    "-output-directory=/work",
+    "/work/main.tex",
+  ]);
+
+  if (status !== 0) {
+    throw new Error(
+      `XeTeX smoke test failed (status ${status}).\n${logLines.slice(-30).join("\n")}`,
+    );
+  }
+
+  return xetex;
+}
+
+const firstPass = await runXeTeX();
+const aux = readRequiredFile(firstPass, "/work/main.aux");
+
+const bibtex = await createEngine("bibtex", runtimeFiles, logLines);
+bibtex.FS.writeFile("/work/main.aux", aux);
+bibtex.FS.writeFile("/work/references.bib", bibliography);
+const bibtexStatus = bibtex.callMain(["main"]);
+
+if (bibtexStatus !== 0) {
   throw new Error(
-    `XeTeX smoke test failed (status ${xetexStatus}).\n${logLines.slice(-30).join("\n")}`,
+    `BibTeX smoke test failed (status ${bibtexStatus}).\n${logLines.slice(-30).join("\n")}`,
   );
 }
 
-const xdv = readRequiredFile(xetex, "/work/main.xdv");
+const bbl = readRequiredFile(bibtex, "/work/main.bbl");
+const bblText = new TextDecoder().decode(bbl);
+
+if (!bblText.includes("Knuth") || !bblText.includes("The TeXbook")) {
+  throw new Error("BibTeX output does not contain the expected bibliography entry.");
+}
+
+const secondPass = await runXeTeX([
+  ["/work/main.aux", aux],
+  ["/work/main.bbl", bbl],
+]);
+const xdv = readRequiredFile(secondPass, "/work/main.xdv");
 const xdvipdfmx = await createEngine("xdvipdfmx", runtimeFiles, logLines);
 xdvipdfmx.FS.writeFile("/work/main.xdv", xdv);
 const pdfStatus = xdvipdfmx.callMain([
@@ -59,5 +97,5 @@ if (header !== "%PDF-" || pdf.byteLength < 1_000) {
 }
 
 console.log(
-  `XeLaTeX runtime smoke test passed (${xdv.byteLength} byte XDV, ${pdf.byteLength} byte PDF).`,
+  `XeLaTeX + BibTeX runtime smoke test passed (${bbl.byteLength} byte BBL, ${xdv.byteLength} byte XDV, ${pdf.byteLength} byte PDF).`,
 );

@@ -5,7 +5,10 @@ export type XeLaTeXPhase =
   | "loading-runtime"
   | "ready"
   | "compiling"
+  | "bibliography"
   | "converting";
+
+export type XeLaTeXBibTeXMode = boolean | "auto";
 
 export type XeLaTeXStatusEvent = {
   message: string;
@@ -48,6 +51,12 @@ export type XeLaTeXCompileOptions = {
   /** Number of sequential XeTeX passes. Defaults to the compiler setting. */
   passes?: number;
   /**
+   * Run BibTeX between XeTeX passes. Disabled by default. `true` requires
+   * classic BibTeX data/style directives, while `"auto"` runs BibTeX only
+   * when the first `.aux` file contains those directives.
+   */
+  bibtex?: XeLaTeXBibTeXMode;
+  /**
    * Extra files to mount in the virtual filesystem before each XeTeX pass
    * and before xdvipdfmx. Paths are relative to the working directory.
    *
@@ -68,6 +77,8 @@ export type XeLaTeXCompileResult = {
   log: string;
   /** Number of XeTeX passes used for this compilation. */
   passes: number;
+  /** Whether BibTeX ran during this compilation. */
+  bibtexRan: boolean;
 };
 
 export type XeLaTeXCompilerOptions = {
@@ -89,6 +100,7 @@ export type WorkerCompileRequest = {
   requestId: string;
   source: string;
   passes: number;
+  bibtex: XeLaTeXBibTeXMode;
   additionalFiles?: Array<{ path: string; data: Uint8Array }>;
 };
 
@@ -104,6 +116,7 @@ export type XeLaTeXWorkerResponse =
       pdf: ArrayBuffer;
       log: string;
       passes: number;
+      bibtexRan: boolean;
     }
   | {
       type: "error";

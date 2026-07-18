@@ -1,12 +1,19 @@
 # ThTeX
 
-Compile XeLaTeX documents to PDF in the browser. XeTeX and `xdvipdfmx` run in
+[![Live Demo](https://img.shields.io/badge/Live_Demo-thtex.pages.dev-F38020?logo=cloudflarepages&logoColor=white)](https://thtex.pages.dev/)
+[![npm](https://img.shields.io/npm/v/@arnon3339/thtex?logo=npm)](https://www.npmjs.com/package/@arnon3339/thtex)
+
+**[Open the live React/PWA demo](https://thtex.pages.dev/)** to compile
+XeLaTeX documents directly in your browser.
+
+Compile XeLaTeX documents to PDF in the browser. XeTeX, BibTeX, and `xdvipdfmx` run in
 an isolated Web Worker, so compilation does not block the React/UI thread.
 
 The package provides:
 
 - a typed, framework-independent browser API;
 - configurable one-to-five-pass XeTeX compilation;
+- optional classic BibTeX execution with standard `.bst` styles;
 - **additional files** — inject fonts, images, style files, and other resources
   into the compiler's virtual filesystem at compile time;
 - automatic preservation of `.aux`, `.toc`, `.lof`, `.lot`, `.out`, and other
@@ -119,8 +126,62 @@ type XeLaTeXCompileResult = {
   pdf: ArrayBuffer;
   log: string;
   passes: number;
+  bibtexRan: boolean;
 };
 ```
+
+## BibTeX bibliographies
+
+Classic BibTeX is optional and disabled by default. Add the `.bib` database
+through `additionalFiles` and pass `bibtex: true`. The worker runs XeTeX,
+BibTeX, the required follow-up XeTeX pass, and finally `xdvipdfmx`. Standard
+styles such as `plain`, `abbrv`, `alpha`, and `unsrt` are included.
+
+```ts
+const bibliography = new TextEncoder().encode(String.raw`
+@book{knuth1984,
+  author = {Donald E. Knuth},
+  title = {The TeXbook},
+  year = {1984},
+  publisher = {Addison-Wesley}
+}`);
+
+const source = String.raw`\documentclass{article}
+\begin{document}
+See \cite{knuth1984}.
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}`;
+
+const result = await compiler.compile(source, {
+  bibtex: true,
+  additionalFiles: [{ path: "references.bib", data: bibliography }],
+});
+
+console.log(result.bibtexRan); // true
+```
+
+The available modes are:
+
+| Value | Behavior |
+| --- | --- |
+| `false` or omitted | Do not run BibTeX. This is the default. |
+| `true` | Run BibTeX and report an error if the first XeTeX pass did not create classic bibliography directives. |
+| `"auto"` | Inspect the first `.aux` file and run BibTeX only when bibliography data and style directives are present. |
+
+When BibTeX runs, the worker guarantees at least two XeTeX passes regardless
+of the requested `passes` value. Use three passes when citations and other
+cross-references require another stabilization pass:
+
+```ts
+await compiler.compile(source, {
+  passes: 3,
+  bibtex: true,
+  additionalFiles: [{ path: "references.bib", data: bibliography }],
+});
+```
+
+BibLaTeX/Biber is not supported by this runtime.
 
 ## Additional files (fonts, images, and resources)
 
@@ -418,9 +479,10 @@ engines are linked with `EXIT_RUNTIME=1`. Only the final pass's XDV is sent to
 Valid pass counts are integers from 1 through 5. Two passes are a good general
 default. Additional passes increase CPU time and peak memory pressure.
 
-This mechanism does not run external programs such as Biber, BibTeX,
-MakeIndex, or MakeGlossaries. Those tools require separate WASM engines and
-explicit pipeline stages.
+Multiple XeTeX passes do not implicitly enable external programs. BibTeX runs
+only when selected with the separate `bibtex` option. Biber, MakeIndex, and
+MakeGlossaries are not included and require separate WASM engines and pipeline
+stages.
 
 ## Compilation queue and isolation
 
@@ -469,6 +531,7 @@ Queues a compilation and returns `Promise<XeLaTeXCompileResult>`.
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `passes` | `number` | Compiler default | XeTeX pass count (1–5). |
+| `bibtex` | `boolean \| "auto"` | `false` | Whether to run classic BibTeX after the first XeTeX pass. |
 | `additionalFiles` | `XeLaTeXAdditionalFile[]` | `[]` | Files to mount in the VFS before compilation — fonts, images, styles, etc. |
 | `onLog` | `(event) => void` | — | Per-job log callback. |
 | `onStatus` | `(event) => void` | — | Per-job status callback. |
@@ -505,6 +568,8 @@ public/xelatex/
 ├── engine/
 │   ├── xetex.mjs
 │   ├── xetex.wasm
+│   ├── bibtex.mjs
+│   ├── bibtex.wasm
 │   ├── xdvipdfmx.mjs
 │   └── xdvipdfmx.wasm
 ├── texmf/
@@ -526,8 +591,8 @@ pnpm exec thtex-manifest --root public/xelatex
 
 ## Building this package
 
-The XeTeX and `xdvipdfmx` browser engines are sourced from the sibling
-`xelatex-artifacts` project. A build synchronizes the four browser artifacts,
+The XeTeX, BibTeX, and `xdvipdfmx` browser engines are sourced from the sibling
+`xelatex-artifacts` project. A build synchronizes the six browser artifacts,
 generates a format with that exact XeTeX WASM binary, and creates the runtime
 manifest before compiling the TypeScript package.
 

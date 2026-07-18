@@ -1,5 +1,6 @@
 import type {
   WorkerCompileRequest,
+  XeLaTeXBibTeXMode,
   XeLaTeXCompileOptions,
   XeLaTeXCompileResult,
   XeLaTeXCompilerOptions,
@@ -25,6 +26,14 @@ function validatePasses(value: number) {
     throw new RangeError(
       `XeTeX passes must be an integer between ${MIN_PASSES} and ${MAX_PASSES}.`,
     );
+  }
+
+  return value;
+}
+
+function validateBibTeX(value: unknown) {
+  if (value !== true && value !== false && value !== "auto") {
+    throw new TypeError('bibtex must be true, false, or "auto".');
   }
 
   return value;
@@ -162,10 +171,12 @@ export class XeLaTeXCompiler {
       );
     }
 
+    let bibtex: XeLaTeXBibTeXMode;
     let passes: number;
     let additionalFiles: NonNullable<WorkerCompileRequest["additionalFiles"]>;
 
     try {
+      bibtex = validateBibTeX(options.bibtex ?? false);
       passes = validatePasses(options.passes ?? this.defaultPasses);
       additionalFiles = prepareAdditionalFiles(options.additionalFiles);
     } catch (error) {
@@ -174,7 +185,7 @@ export class XeLaTeXCompiler {
       );
     }
     const job = this.queue.then(() =>
-      this.runCompilation(source, passes, additionalFiles, options),
+      this.runCompilation(source, passes, bibtex, additionalFiles, options),
     );
 
     this.queue = job.then(
@@ -304,6 +315,7 @@ export class XeLaTeXCompiler {
         pdf: message.pdf,
         log: message.log,
         passes: message.passes,
+        bibtexRan: message.bibtexRan,
       });
     } else {
       pending.reject(new XeLaTeXCompileError(message.message, message.log));
@@ -313,6 +325,7 @@ export class XeLaTeXCompiler {
   private async runCompilation(
     source: string,
     passes: number,
+    bibtex: XeLaTeXBibTeXMode,
     additionalFiles: NonNullable<WorkerCompileRequest["additionalFiles"]>,
     options: XeLaTeXCompileOptions,
   ) {
@@ -339,6 +352,7 @@ export class XeLaTeXCompiler {
 
       const request: WorkerCompileRequest = {
         type: "compile",
+        bibtex,
         passes,
         requestId,
         source,

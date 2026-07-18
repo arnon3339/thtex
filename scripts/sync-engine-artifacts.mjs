@@ -34,11 +34,18 @@ Defaults to ../xelatex-artifacts. XELATEX_ARTIFACTS_DIR can override it.`);
   throw new Error(`Unknown argument: ${argument}`);
 }
 
-const mappings = [
+const requiredMappings = [
   ["browser/xetex/xetex.mjs", "engine/xetex.mjs"],
   ["browser/xetex/xetex.wasm", "engine/xetex.wasm"],
   ["browser/xdvipdfmx/xdvipdfmx.mjs", "engine/xdvipdfmx.mjs"],
   ["browser/xdvipdfmx/xdvipdfmx.wasm", "engine/xdvipdfmx.wasm"],
+  ["browser/bibtex/bibtex.mjs", "engine/bibtex.mjs"],
+  ["browser/bibtex/bibtex.wasm", "engine/bibtex.wasm"],
+];
+
+// ICU is runtime data rather than a compiled engine. Copy it when the artifact
+// bundle provides it, otherwise retain the checked-in runtime copy.
+const optionalMappings = [
   ["browser/icu/icudt76l.dat", "icu/icudt76l.dat"],
   ["browser/icu/LICENSE", "icu/LICENSE"],
   [
@@ -50,12 +57,19 @@ const mappings = [
 await mkdir(engineRoot, { recursive: true });
 const files = [];
 
-for (const [sourceRelativePath, destinationRelativePath] of mappings) {
+async function copyArtifact(
+  sourceRelativePath,
+  destinationRelativePath,
+  { required },
+) {
   const sourcePath = path.join(artifactsRoot, sourceRelativePath);
   const metadata = await stat(sourcePath).catch(() => null);
 
   if (!metadata?.isFile() || metadata.size === 0) {
-    throw new Error(`Missing XeLaTeX artifact: ${sourcePath}`);
+    if (required) {
+      throw new Error(`Missing XeLaTeX artifact: ${sourcePath}`);
+    }
+    return;
   }
 
   const destinationPath = path.join(runtimeRoot, destinationRelativePath);
@@ -70,12 +84,18 @@ for (const [sourceRelativePath, destinationRelativePath] of mappings) {
   });
 }
 
+for (const mapping of requiredMappings) {
+  await copyArtifact(...mapping, { required: true });
+}
+
+for (const mapping of optionalMappings) {
+  await copyArtifact(...mapping, { required: false });
+}
+
 await writeFile(
   path.join(engineRoot, "artifacts.json"),
   `${JSON.stringify({ version: 1, files }, null, 2)}\n`,
   "utf8",
 );
 
-console.log(
-  `Synchronized ${files.length} browser runtime artifacts from ${artifactsRoot}.`,
-);
+console.log(`Synchronized ${files.length} browser runtime artifacts from ${artifactsRoot}.`);

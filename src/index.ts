@@ -1,6 +1,7 @@
 export { XeLaTeXCompileError, XeLaTeXCompiler } from "./compiler.js";
 export type {
   XeLaTeXAdditionalFile,
+  XeLaTeXBibTeXMode,
   XeLaTeXCompileOptions,
   XeLaTeXCompileResult,
   XeLaTeXCompilerOptions,

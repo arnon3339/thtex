@@ -1,5 +1,7 @@
 # ThTeX React PWA example
 
+Live deployment: **[thtex.pages.dev](https://thtex.pages.dev/)**
+
 A Vite + React example that compiles XeLaTeX documents entirely in the browser.
 The production build is a static, installable PWA suitable for Cloudflare Pages.
 

@@ -37,6 +37,7 @@ const mappings = [
 ];
 
 const directoryMappings = [
+  ["bibtex/bst/base", "texmf/bibtex/bst/base"],
   ["fonts/tfm/public/cm", "texmf/fonts/tfm/public/cm"],
   [
     "fonts/tfm/public/amsfonts/cmextra",

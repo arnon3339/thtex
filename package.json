@@ -5,7 +5,7 @@
   "type": "module",
   "license": "MIT",
   "author": "Arnon Songmoolnak",
-  "homepage": "https://github.com/arnon3339/thtex#readme",
+  "homepage": "https://thtex.pages.dev/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/arnon3339/thtex.git"
@@ -21,6 +21,8 @@
     "latex",
     "xelatex",
     "xetex",
+    "bibtex",
+    "bibliography",
     "webassembly",
     "wasm",
     "web-worker",

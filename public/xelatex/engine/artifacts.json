@@ -26,22 +26,16 @@
       "sha256": "034cb906af04d8e4b56af3c6404f776779daf88dd09652d42001bd5835bb4b00"
     },
     {
-      "artifact": "browser/icu/icudt76l.dat",
-      "output": "icu/icudt76l.dat",
-      "size": 31851856,
-      "sha256": "dbc14e1c48ef209f230adc2aa6854bd4d6bba8f5e6733e75897a4263d97920f0"
+      "artifact": "browser/bibtex/bibtex.mjs",
+      "output": "engine/bibtex.mjs",
+      "size": 145100,
+      "sha256": "42830725271ebc0905e9e3eaad603c4b3db64764b13e707d4499e2779681aeee"
     },
     {
-      "artifact": "browser/icu/LICENSE",
-      "output": "icu/LICENSE",
-      "size": 26487,
-      "sha256": "01edac20612b1e590c1c1cfb02b7218c6adc7b0a944eda7a1e03aeee10725aed"
-    },
-    {
-      "artifact": "browser/icu/icu4c-76_1-data-bin-l-README.md",
-      "output": "icu/icu4c-76_1-data-bin-l-README.md",
-      "size": 762,
-      "sha256": "d495fff757670541d390add855f8508d95fc32e85f8c76b5ddfb6913ef9b77d4"
+      "artifact": "browser/bibtex/bibtex.wasm",
+      "output": "engine/bibtex.wasm",
+      "size": 1052494,
+      "sha256": "a495022e1bf49a39ef013297a38a5d78ba132319d62bb1d3cc1456c510a738da"
     }
   ]
 }

@@ -6,6 +6,12 @@ function validatePasses(value) {
     }
     return value;
 }
+function validateBibTeX(value) {
+    if (value !== true && value !== false && value !== "auto") {
+        throw new TypeError('bibtex must be true, false, or "auto".');
+    }
+    return value;
+}
 function resolveUrl(value, base) {
     return value instanceof URL ? value : new URL(value, base);
 }
@@ -100,16 +106,18 @@ export class XeLaTeXCompiler {
         if (typeof source !== "string" || source.trim().length === 0) {
             return Promise.reject(new TypeError("XeLaTeX source must be a non-empty string."));
         }
+        let bibtex;
         let passes;
         let additionalFiles;
         try {
+            bibtex = validateBibTeX(options.bibtex ?? false);
             passes = validatePasses(options.passes ?? this.defaultPasses);
             additionalFiles = prepareAdditionalFiles(options.additionalFiles);
         }
         catch (error) {
             return Promise.reject(error instanceof Error ? error : new Error("Invalid compile options."));
         }
-        const job = this.queue.then(() => this.runCompilation(source, passes, additionalFiles, options));
+        const job = this.queue.then(() => this.runCompilation(source, passes, bibtex, additionalFiles, options));
         this.queue = job.then(() => undefined, () => undefined);
         return job;
     }
@@ -209,13 +217,14 @@ export class XeLaTeXCompiler {
                 pdf: message.pdf,
                 log: message.log,
                 passes: message.passes,
+                bibtexRan: message.bibtexRan,
             });
         }
         else {
             pending.reject(new XeLaTeXCompileError(message.message, message.log));
         }
     }
-    async runCompilation(source, passes, additionalFiles, options) {
+    async runCompilation(source, passes, bibtex, additionalFiles, options) {
         await this.ready;
         if (this.disposed) {
             throw new Error("XeLaTeXCompiler has been disposed.");
@@ -234,6 +243,7 @@ export class XeLaTeXCompiler {
             };
             const request = {
                 type: "compile",
+                bibtex,
                 passes,
                 requestId,
                 source,
