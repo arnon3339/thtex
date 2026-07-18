@@ -134,8 +134,8 @@ type XeLaTeXCompileResult = {
 
 Classic BibTeX is optional and disabled by default. Add the `.bib` database
 through `additionalFiles` and pass `bibtex: true`. The worker runs XeTeX,
-BibTeX, the required follow-up XeTeX pass, and finally `xdvipdfmx`. Standard
-styles such as `plain`, `abbrv`, `alpha`, and `unsrt` are included.
+BibTeX, two follow-up XeTeX passes, and finally `xdvipdfmx`. Standard styles
+such as `plain`, `abbrv`, `alpha`, and `unsrt` are included.
 
 ```ts
 const bibliography = new TextEncoder().encode(String.raw`
@@ -169,9 +169,10 @@ The available modes are:
 | `true` | Run BibTeX and report an error if the first XeTeX pass did not create classic bibliography directives. |
 | `"auto"` | Inspect the first `.aux` file and run BibTeX only when bibliography data and style directives are present. |
 
-When BibTeX runs, the worker guarantees at least two XeTeX passes regardless
-of the requested `passes` value. Use three passes when citations and other
-cross-references require another stabilization pass:
+When BibTeX runs, the worker guarantees at least three XeTeX passes regardless
+of the requested `passes` value. The first creates BibTeX input, the second
+loads the generated bibliography and writes citation mappings, and the third
+reads those mappings so citations no longer render as `[?]`:
 
 ```ts
 await compiler.compile(source, {

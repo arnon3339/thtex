@@ -74,7 +74,18 @@ const secondPass = await runXeTeX([
   ["/work/main.aux", aux],
   ["/work/main.bbl", bbl],
 ]);
-const xdv = readRequiredFile(secondPass, "/work/main.xdv");
+const citationAux = readRequiredFile(secondPass, "/work/main.aux");
+const citationAuxText = new TextDecoder().decode(citationAux);
+
+if (!citationAuxText.includes("\\bibcite{knuth1984}")) {
+  throw new Error("The second XeTeX pass did not write the expected citation mapping.");
+}
+
+const thirdPass = await runXeTeX([
+  ["/work/main.aux", citationAux],
+  ["/work/main.bbl", bbl],
+]);
+const xdv = readRequiredFile(thirdPass, "/work/main.xdv");
 const xdvipdfmx = await createEngine("xdvipdfmx", runtimeFiles, logLines);
 xdvipdfmx.FS.writeFile("/work/main.xdv", xdv);
 const pdfStatus = xdvipdfmx.callMain([

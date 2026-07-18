@@ -517,7 +517,7 @@ async function compile(request: CompileRequest) {
     const sourceRequestsBibTeX = /\\bibliography\s*\{/.test(source);
     let passCount =
       bibtexMode !== false && sourceRequestsBibTeX
-        ? Math.max(2, requestedPassCount)
+        ? Math.max(3, requestedPassCount)
         : requestedPassCount;
 
     for (let pass = 1; pass <= passCount; pass += 1) {
@@ -558,7 +558,7 @@ async function compile(request: CompileRequest) {
             callerFiles,
           );
           bibtexRan = true;
-          passCount = Math.max(2, passCount);
+          passCount = Math.max(3, passCount);
         }
       }
     }

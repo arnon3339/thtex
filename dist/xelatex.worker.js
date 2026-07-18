@@ -326,7 +326,7 @@ async function compile(request) {
         let bibtexRan = false;
         const sourceRequestsBibTeX = /\\bibliography\s*\{/.test(source);
         let passCount = bibtexMode !== false && sourceRequestsBibTeX
-            ? Math.max(2, requestedPassCount)
+            ? Math.max(3, requestedPassCount)
             : requestedPassCount;
         for (let pass = 1; pass <= passCount; pass += 1) {
             const result = await runXeTeXPass(createXeTeXModule, runtimeFiles, requestId, logLines, source, pass, passCount, previousPassFiles, callerFiles);
@@ -342,7 +342,7 @@ async function compile(request) {
                 if (auxRequestsBibTeX) {
                     previousPassFiles = await runBibTeX(createBibTeXModule, runtimeFiles, requestId, logLines, previousPassFiles, callerFiles);
                     bibtexRan = true;
-                    passCount = Math.max(2, passCount);
+                    passCount = Math.max(3, passCount);
                 }
             }
         }
