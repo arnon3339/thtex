@@ -60,6 +60,132 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
+async function waitForServiceWorkerControl(timeoutMs = 15_000) {
+  if (
+    !import.meta.env.PROD ||
+    !("serviceWorker" in navigator) ||
+    navigator.serviceWorker.controller
+  ) {
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      navigator.serviceWorker.removeEventListener("controllerchange", finish);
+      resolve();
+    };
+
+    const timeout = window.setTimeout(finish, timeoutMs);
+    navigator.serviceWorker.addEventListener("controllerchange", finish);
+
+    if (navigator.serviceWorker.controller) finish();
+  });
+}
+
+async function ensureOfflineRuntimeCached(assetBaseUrl: URL) {
+  if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+
+  const runtimeManifestUrl = new URL("runtime-manifest.json", assetBaseUrl);
+  const engineManifestUrl = new URL("engine/artifacts.json", assetBaseUrl);
+  const [runtimeResponse, engineResponse] = await Promise.all([
+    fetch(runtimeManifestUrl),
+    fetch(engineManifestUrl),
+  ]);
+
+  if (!runtimeResponse.ok) {
+    throw new Error(
+      `Runtime manifest could not be cached (${runtimeResponse.status}).`,
+    );
+  }
+
+  if (!engineResponse.ok) {
+    throw new Error(
+      `Engine manifest could not be cached (${engineResponse.status}).`,
+    );
+  }
+
+  const runtimeManifest = (await runtimeResponse.json()) as {
+    files?: Array<{
+      chunks?: Array<{ path: string }>;
+      path: string;
+    }>;
+  };
+  const engineManifest = (await engineResponse.json()) as {
+    files?: Array<{ output?: string }>;
+  };
+
+  const runtimePaths = (runtimeManifest.files ?? []).flatMap((file) =>
+    file.chunks?.length
+      ? file.chunks.map(({ path }) => path)
+      : [file.path],
+  );
+  const enginePaths = (engineManifest.files ?? [])
+    .map(({ output }) => output)
+    .filter(
+      (output): output is string => output?.startsWith("engine/") === true,
+    );
+  const requiredUrls = [
+    new URL("xelatex.worker.js", assetBaseUrl).href,
+    runtimeManifestUrl.href,
+    engineManifestUrl.href,
+    ...runtimePaths.map((path) => new URL(path, assetBaseUrl).href),
+    ...enginePaths.map((path) => new URL(path, assetBaseUrl).href),
+  ];
+  const cache = await caches.open("thtex-runtime");
+  const missingUrls = (
+    await Promise.all(
+      [...new Set(requiredUrls)].map(async (url) =>
+        (await cache.match(url)) ? null : url,
+      ),
+    )
+  ).filter((url): url is string => url !== null);
+
+  let nextIndex = 0;
+  const workerCount = Math.min(8, missingUrls.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < missingUrls.length) {
+        const url = missingUrls[nextIndex];
+        nextIndex += 1;
+        const assetResponse = await fetch(url);
+
+        if (!assetResponse.ok) {
+          throw new Error(
+            `Offline asset ${new URL(url).pathname} could not be cached (${assetResponse.status}).`,
+          );
+        }
+
+        const headers = new Headers(assetResponse.headers);
+        const bytes = await assetResponse.arrayBuffer();
+
+        if (!(await cache.match(url))) {
+          try {
+            await cache.put(
+              url,
+              new Response(bytes, {
+                headers,
+                status: assetResponse.status,
+                statusText: assetResponse.statusText,
+              }),
+            );
+          } catch (reason) {
+            const detail = reason instanceof Error ? `: ${reason.message}` : "";
+            throw new Error(
+              `Offline asset ${new URL(url).pathname} could not be stored${detail}`,
+            );
+          }
+        }
+      }
+    }),
+  );
+}
+
 function App() {
   const compilerRef = useRef<XeLaTeXCompiler | null>(null);
   const pdfUrlRef = useRef<string | null>(null);
@@ -83,15 +209,34 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    const compiler = new XeLaTeXCompiler({
-      assetBaseUrl: new URL("xelatex/", document.baseURI),
-      onStatus: setStatus,
-    });
-    compilerRef.current = compiler;
+    let compiler: XeLaTeXCompiler | null = null;
 
-    compiler.ready
-      .then(({ runtimeBytes, runtimeFileCount }) => {
+    void (async () => {
+      try {
+        setStatus({
+          message: "Preparing the offline cache…",
+          phase: "initializing",
+        });
+        await waitForServiceWorkerControl();
         if (cancelled) return;
+
+        const assetBaseUrl = new URL("xelatex/", document.baseURI);
+        compiler = new XeLaTeXCompiler({
+          assetBaseUrl,
+          onStatus: setStatus,
+        });
+        compilerRef.current = compiler;
+
+        const { runtimeBytes, runtimeFileCount } = await compiler.ready;
+        if (cancelled) return;
+
+        setStatus({
+          message: "Verifying the offline runtime…",
+          phase: "loading-runtime",
+        });
+        await ensureOfflineRuntimeCached(assetBaseUrl);
+        if (cancelled) return;
+
         setReady(true);
         setStatus({
           message: `Ready · ${runtimeFileCount} files · ${formatBytes(runtimeBytes)}`,
@@ -101,15 +246,15 @@ function App() {
           loadedFiles: runtimeFileCount,
           totalFiles: runtimeFileCount,
         });
-      })
-      .catch((reason: unknown) => {
+      } catch (reason) {
         if (cancelled) return;
         setError(reason instanceof Error ? reason.message : String(reason));
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
-      compiler.dispose();
+      compiler?.dispose();
       compilerRef.current = null;
       if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
     };
@@ -263,7 +408,7 @@ function App() {
         <span>Runs locally · Works offline after first load</span>
       </footer>
 
-      {(offlineReady || needRefresh) && (
+      {((offlineReady && ready) || needRefresh) && (
         <div className="pwa-toast" role="status">
           <div>
             <strong>{needRefresh ? "An update is ready" : "Ready to work offline"}</strong>

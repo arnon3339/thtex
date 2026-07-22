@@ -24,8 +24,15 @@ pnpm build
 pnpm preview
 ```
 
-The deployable output is `dist/`. The build precaches the application and the
-XeLaTeX runtime, so the PWA can reopen offline after its first complete visit.
+The deployable output is `dist/`. The build precaches the small application
+shell. On the first production visit, the service worker takes control before
+XeLaTeX starts; every runtime response is then stored in a dedicated cache.
+The example also downloads the engine WASM binaries before showing the ready
+state, so it can reopen and perform its first compilation offline afterward.
+
+Wait until the UI shows `Ready` before disconnecting. Closing the tab while the
+runtime progress bar is still moving leaves an incomplete offline cache; open
+the application online again and let initialization finish to repair it.
 
 ## Cloudflare Pages
 

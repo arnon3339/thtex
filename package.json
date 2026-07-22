@@ -1,6 +1,6 @@
 {
   "name": "@arnon3339/thtex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Browser XeLaTeX compiler powered by WebAssembly and an isolated Web Worker.",
   "type": "module",
   "license": "MIT",

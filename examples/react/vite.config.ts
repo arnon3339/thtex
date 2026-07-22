@@ -2,19 +2,34 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-const MiB = 1024 * 1024;
-
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
       registerType: "prompt",
       injectRegister: false,
+      includeManifestIcons: false,
       workbox: {
+        clientsClaim: true,
         cleanupOutdatedCaches: true,
-        globPatterns: ["**/*"],
-        maximumFileSizeToCacheInBytes: 24 * MiB,
+        globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
+        globIgnores: ["xelatex/**/*"],
         navigateFallback: "index.html",
+        runtimeCaching: [
+          {
+            urlPattern: /\/xelatex\/.*$/,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "thtex-runtime",
+              matchOptions: {
+                ignoreVary: true,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
       },
       manifest: {
         name: "ThTeX React PWA",
